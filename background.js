@@ -29,7 +29,6 @@ async function getTemporaryTabGroupId() {
       title: TEMPORARY_GROUP_TITLE,
       color: "red",
     });
-    // FIXME assert there is only one group
     id = groups[0].id;
   } catch (e) {
     // no tab group found
@@ -82,16 +81,5 @@ browser.tabs.onCreated.addListener(async (createdTab) => {
     const tabsToClose = temporaryTabs.filter((tab) => tab.id !== newTabId);
 
     await closeTabs(tabsToClose);
-  }
-});
-
-browser.tabs.onActivated.addListener(async (activeInfo) => {
-  const temporaryGroupId = await getTemporaryTabGroupId();
-
-  if (temporaryGroupId != browser.tabGroups.TAB_GROUP_ID_NONE) {
-    const temporaryTabs = await getTemporaryTabs(temporaryGroupId);
-    await closeTabs(temporaryTabs);
-  } else {
-    // no tab group found
   }
 });
