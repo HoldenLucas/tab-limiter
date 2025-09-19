@@ -1,6 +1,6 @@
 import { TAB_LIMIT_KEY } from "./constants.js";
 
-const TEMPORARY_GROUP_TITLE = "Temporary\u200B"; // Invisible zero-width space
+const TEMPORARY_GROUP_TITLE = "Temp\u200Borary"; // Invisible zero-width space
 
 async function getTabLimit() {
   const result = await browser.storage.sync.get(TAB_LIMIT_KEY);
