@@ -21,75 +21,66 @@ browser.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// Track the temporary tab group ID
-let temporaryGroupId = null;
+async function findTemporaryGroup() {
+  try {
+    const allGroups = await browser.tabGroups.query({});
+    return allGroups.find((group) => group.title === TEMPORARY_GROUP_TITLE);
+  } catch (e) {
+    console.log("Could not query tab groups");
+    return null;
+  }
+}
 
 // Initialize by finding existing temporary group
 async function initializeTemporaryGroup() {
-  try {
-    const allGroups = await browser.tabGroups.query({});
-    const existingTempGroup = allGroups.find(
-      (group) => group.title === TEMPORARY_GROUP_TITLE,
-    );
-    if (existingTempGroup) {
-      temporaryGroupId = existingTempGroup.id;
-      console.log(`Found existing temporary tab group ${temporaryGroupId}`);
-    }
-  } catch (e) {
-    // tabGroups API might not be available
-    console.log("Could not query tab groups during initialization");
+  const existingTempGroup = await findTemporaryGroup();
+  if (existingTempGroup) {
+    console.log(`Found existing temporary tab group ${existingTempGroup.id}`);
   }
 }
 
 // Get all tabs in the temporary group
 async function getTemporaryTabs() {
-  if (!temporaryGroupId) {
+  const tempGroup = await findTemporaryGroup();
+  if (!tempGroup) {
     return [];
   }
 
   try {
-    const tabs = await browser.tabs.query({ groupId: temporaryGroupId });
+    const tabs = await browser.tabs.query({ groupId: tempGroup.id });
     return tabs;
   } catch (e) {
-    // Group might not exist anymore
-    temporaryGroupId = null;
     return [];
   }
 }
 
-// Get or create the temporary tab group
+// Get or create temporary group
 async function getOrCreateTemporaryGroup(tabId) {
-  // Check if group still exists
-  if (temporaryGroupId) {
-    try {
-      const group = await browser.tabGroups.get(temporaryGroupId);
-      if (group) {
-        // Add tab to existing group
-        await browser.tabs.group({
-          tabIds: [tabId],
-          groupId: temporaryGroupId,
-        });
-        return temporaryGroupId;
-      }
-    } catch (e) {
-      // Group doesn't exist anymore
-      temporaryGroupId = null;
-    }
+  // Check if group exists
+  const existingGroup = await findTemporaryGroup();
+
+  if (existingGroup) {
+    // Add tab to existing group
+    await browser.tabs.group({
+      tabIds: [tabId],
+      groupId: existingGroup.id,
+    });
+    return existingGroup.id;
   }
 
-  // Create new group by grouping the tab
-  temporaryGroupId = await browser.tabs.group({
+  // Create new group
+  const newGroupId = await browser.tabs.group({
     tabIds: [tabId],
   });
 
   // Update the group properties
-  await browser.tabGroups.update(temporaryGroupId, {
+  await browser.tabGroups.update(newGroupId, {
     title: TEMPORARY_GROUP_TITLE,
     color: "red",
   });
 
-  console.log(`Created temporary tab group ${temporaryGroupId}`);
-  return temporaryGroupId;
+  console.log(`Created temporary tab group ${newGroupId}`);
+  return newGroupId;
 }
 
 // Check if we should mark a new tab as temporary
