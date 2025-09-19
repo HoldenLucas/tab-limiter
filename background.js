@@ -1,3 +1,7 @@
+let TAB_LIMIT = 10;
+
+const TEMPORARY_GROUP_TITLE = "Temporary\u200B"; // Invisible zero-width space at end
+
 // Load settings from storage
 async function loadSettings() {
   const result = await browser.storage.sync.get({ tabLimit: 10 });
@@ -7,6 +11,7 @@ async function loadSettings() {
 
 // Initialize settings on startup
 loadSettings();
+initializeTemporaryGroup();
 
 // Listen for settings changes
 browser.storage.onChanged.addListener((changes, area) => {
@@ -16,11 +21,41 @@ browser.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// Set to track temporary tabs
-const temporaryTabs = new Set();
-
 // Track the temporary tab group ID
 let temporaryGroupId = null;
+
+// Initialize by finding existing temporary group
+async function initializeTemporaryGroup() {
+  try {
+    const allGroups = await browser.tabGroups.query({});
+    const existingTempGroup = allGroups.find(
+      (group) => group.title === TEMPORARY_GROUP_TITLE,
+    );
+    if (existingTempGroup) {
+      temporaryGroupId = existingTempGroup.id;
+      console.log(`Found existing temporary tab group ${temporaryGroupId}`);
+    }
+  } catch (e) {
+    // tabGroups API might not be available
+    console.log("Could not query tab groups during initialization");
+  }
+}
+
+// Get all tabs in the temporary group
+async function getTemporaryTabs() {
+  if (!temporaryGroupId) {
+    return [];
+  }
+
+  try {
+    const tabs = await browser.tabs.query({ groupId: temporaryGroupId });
+    return tabs;
+  } catch (e) {
+    // Group might not exist anymore
+    temporaryGroupId = null;
+    return [];
+  }
+}
 
 // Get or create the temporary tab group
 async function getOrCreateTemporaryGroup(tabId) {
@@ -49,7 +84,7 @@ async function getOrCreateTemporaryGroup(tabId) {
 
   // Update the group properties
   await browser.tabGroups.update(temporaryGroupId, {
-    title: "Temporary",
+    title: TEMPORARY_GROUP_TITLE,
     color: "red",
   });
 
@@ -64,18 +99,15 @@ async function onTabCreated(tab) {
   // If we're at or over the limit, mark this tab as temporary
   if (tabs.length > TAB_LIMIT) {
     // Close any existing temporary tabs first
-    for (const tabId of temporaryTabs) {
+    const existingTemporaryTabs = await getTemporaryTabs();
+    for (const tempTab of existingTemporaryTabs) {
       try {
-        await browser.tabs.remove(tabId);
-        console.log(`Closed existing temporary tab ${tabId}`);
+        await browser.tabs.remove(tempTab.id);
+        console.log(`Closed existing temporary tab ${tempTab.id}`);
       } catch (e) {
         // Tab might already be closed
       }
     }
-    temporaryTabs.clear();
-
-    // Now mark the new tab as temporary
-    temporaryTabs.add(tab.id);
 
     // Create group or add tab to temporary group
     await getOrCreateTemporaryGroup(tab.id);
@@ -88,30 +120,20 @@ async function onTabCreated(tab) {
 
 // Handle tab activation changes
 async function onTabActivated(activeInfo) {
-  // Get the previously active tab ID from all tabs
-  const tabs = await browser.tabs.query({});
-
   // Check all temporary tabs and close any that are not active
-  for (const tabId of temporaryTabs) {
-    if (tabId !== activeInfo.tabId) {
+  const temporaryTabs = await getTemporaryTabs();
+  for (const tempTab of temporaryTabs) {
+    if (tempTab.id !== activeInfo.tabId) {
       try {
-        await browser.tabs.remove(tabId);
-        temporaryTabs.delete(tabId);
-        console.log(`Closed temporary tab ${tabId}`);
+        await browser.tabs.remove(tempTab.id);
+        console.log(`Closed temporary tab ${tempTab.id}`);
       } catch (e) {
         // Tab might already be closed
-        temporaryTabs.delete(tabId);
       }
     }
   }
 }
 
-// Clean up when tabs are closed
-function onTabRemoved(tabId) {
-  temporaryTabs.delete(tabId);
-}
-
 // Listen for events
 browser.tabs.onCreated.addListener(onTabCreated);
 browser.tabs.onActivated.addListener(onTabActivated);
-browser.tabs.onRemoved.addListener(onTabRemoved);
