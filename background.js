@@ -1,112 +1,106 @@
 // # Holden's Tab Limiter
 //
 // This is a Firefox extension that limits the maximum number of open tabs.
-//
 // When the maximum number of tabs is reached, opening another tab will put it in the Temporary tab group.
-//
 // The Temporary tab group should only ever contain one tab.
-//
 // If there is already a tab in the Temporary group, opening another tab will close the existing temporary tab.
 
 import { TAB_LIMIT_KEY } from "./constants.js";
 
-const TEMPORARY_GROUP_TITLE = "Temporary\u200B"; // Invisible zero-width space at end
+const TEMPORARY_GROUP_TITLE = "Temporary\u200B"; // Invisible zero-width space
 
 async function getTabLimit() {
-  const result = await browser.storage.sync.get("tabLimit");
-  const tabLimit = result.tabLimit ?? Number.POSITIVE_INFINITY;
-  return result.tabLimit;
+  const result = await browser.storage.sync.get(TAB_LIMIT_KEY);
+  // const defaultTabLimit = Number.POSITIVE_INFINITY;
+  const defaultTabLimit = 8; // FIXME
+  const tabLimit = result.tabLimit ?? defaultTabLimit;
+  return tabLimit;
 }
 
-async function findTemporaryGroup() {
-  try {
-    const allGroups = await browser.tabGroups.query({});
-    return allGroups.find((group) => group.title === TEMPORARY_GROUP_TITLE);
-  } catch (e) {
-    return null;
-  }
-}
-
-async function getTemporaryTabs() {
-  const tempGroup = await findTemporaryGroup();
-  if (!tempGroup) {
-    return [];
-  }
+async function getTemporaryTabs(tempGroupId) {
+  let tabs = [];
 
   try {
-    const tabs = await browser.tabs.query({ groupId: tempGroup.id });
-    return tabs;
+    tabs = await browser.tabs.query({ groupId: tempGroupId });
   } catch (e) {
-    return [];
+    tabs = [];
   }
+
+  console.debug("Temporary tabs", tabs);
+  return tabs;
 }
 
-async function getOrCreateTemporaryGroup(tabId) {
-  const existingGroup = await findTemporaryGroup();
+async function getTemporaryTabGroupId() {
+  let id = browser.tabGroups.TAB_GROUP_ID_NONE;
 
-  if (existingGroup) {
-    await browser.tabs.group({
-      tabIds: [tabId],
-      groupId: existingGroup.id,
-    });
-    return existingGroup.id;
-  } else {
-    const newGroupId = await browser.tabs.group({
-      tabIds: [tabId],
-    });
-
-    await browser.tabGroups.update(newGroupId, {
+  try {
+    const groups = await browser.tabGroups.query({
       title: TEMPORARY_GROUP_TITLE,
       color: "red",
     });
+    // FIXME assert there is only one group
+    id = groups[0].id;
+  } catch (e) {
+    // no tab group found
+  }
 
-    return newGroupId;
+  console.debug("Temporary tab group id", id);
+  return id;
+}
+
+async function closeTabs(tabs) {
+  for (const tab of tabs) {
+    const id = tab.id;
+    try {
+      await browser.tabs.remove(id);
+      console.debug("Closed tab", tab);
+    } catch (e) {
+      console.debug("Tab was already closed", tab);
+    }
   }
 }
 
-async function onTabCreated(createdTab) {
+browser.tabs.onCreated.addListener(async (createdTab) => {
   const tabs = await browser.tabs.query({});
   const tabLimit = await getTabLimit();
 
   if (tabs.length > tabLimit) {
-    await getOrCreateTemporaryGroup(createdTab.id);
+    const newTabId = createdTab.id;
 
-    await replaceTemporaryTab(createdTab.id);
+    let temporaryGroupId = await getTemporaryTabGroupId();
+
+    if (temporaryGroupId != browser.tabGroups.TAB_GROUP_ID_NONE) {
+      await browser.tabs.group({
+        tabIds: [newTabId],
+        groupId: temporaryGroupId,
+      });
+    } else {
+      const newGroupId = await browser.tabs.group({
+        tabIds: [newTabId],
+      });
+
+      await browser.tabGroups.update(newGroupId, {
+        title: TEMPORARY_GROUP_TITLE,
+        color: "red",
+      });
+
+      temporaryGroupId = newGroupId;
+    }
+
+    const temporaryTabs = await getTemporaryTabs(temporaryGroupId);
+    const tabsToClose = temporaryTabs.filter((tab) => tab.id !== newTabId);
+
+    await closeTabs(tabsToClose);
   }
-}
+});
 
-async function replaceTemporaryTab(preserveTabId) {
-  const temporaryTabs = await getTemporaryTabs();
+browser.tabs.onActivated.addListener(async (activeInfo) => {
+  const temporaryGroupId = await getTemporaryTabGroupId();
 
-  const tabsToClose = temporaryTabs.filter((tab) => tab.id !== preserveTabId);
-
-  for (const tab of tabsToClose) {
-    await closeTab(tab);
+  if (temporaryGroupId != browser.tabGroups.TAB_GROUP_ID_NONE) {
+    const temporaryTabs = await getTemporaryTabs(temporaryGroupId);
+    await closeTabs(temporaryTabs);
+  } else {
+    // no tab group found
   }
-}
-
-async function closeAllTemporaryTabs() {
-  const temporaryTabs = await getTemporaryTabs();
-
-  for (const tempTab of temporaryTabs) {
-    await closeTab(tempTab);
-  }
-}
-
-async function closeTab(tab) {
-  const tabId = tab.id;
-  try {
-    await browser.tabs.remove(tabId);
-    console.log(`Closed tab ${tabId}`);
-  } catch (e) {
-    console.log(`Tab ${tabId} was already closed`);
-  }
-}
-
-async function onTabActivated(activeInfo) {
-  await closeAllTemporaryTabs();
-}
-
-// Listen for events
-browser.tabs.onCreated.addListener(onTabCreated);
-browser.tabs.onActivated.addListener(onTabActivated);
+});
