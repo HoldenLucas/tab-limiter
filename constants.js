@@ -1,1 +1,1 @@
-const TAB_LIMIT_KEY = "configuredTabLimit";
+export const TAB_LIMIT_KEY = "configuredTabLimit";
