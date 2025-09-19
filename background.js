@@ -15,7 +15,6 @@ async function findTemporaryGroup() {
   }
 }
 
-// Get all tabs in the temporary group
 async function getTemporaryTabs() {
   const tempGroup = await findTemporaryGroup();
   if (!tempGroup) {
@@ -34,50 +33,40 @@ async function getOrCreateTemporaryGroup(tabId) {
   const existingGroup = await findTemporaryGroup();
 
   if (existingGroup) {
-    // Add tab to existing group
     await browser.tabs.group({
       tabIds: [tabId],
       groupId: existingGroup.id,
     });
     return existingGroup.id;
+  } else {
+    const newGroupId = await browser.tabs.group({
+      tabIds: [tabId],
+    });
+
+    await browser.tabGroups.update(newGroupId, {
+      title: TEMPORARY_GROUP_TITLE,
+      color: "red",
+    });
+
+    console.log(`Created temporary tab group ${newGroupId}`);
+    return newGroupId;
   }
-
-  // Create new group
-  const newGroupId = await browser.tabs.group({
-    tabIds: [tabId],
-  });
-
-  // Update the group properties
-  await browser.tabGroups.update(newGroupId, {
-    title: TEMPORARY_GROUP_TITLE,
-    color: "red",
-  });
-
-  console.log(`Created temporary tab group ${newGroupId}`);
-  return newGroupId;
 }
 
-// Check if we should mark a new tab as temporary
 async function onTabCreated(tab) {
   const tabs = await browser.tabs.query({});
   const tabLimit = await getTabLimit();
 
-  // If we're at or over the limit, mark this tab as temporary
   if (tabs.length > tabLimit) {
     await closeTemporaryTabs();
 
-    // Create group or add tab to temporary group
     await getOrCreateTemporaryGroup(tab.id);
-
-    console.log(
-      `Tab ${tab.id} marked as temporary and added to group (${tabs.length} total tabs)`,
-    );
   }
 }
 
 async function closeTemporaryTabs() {
-  // Close any existing temporary tabs first
   const temporaryTabs = await getTemporaryTabs();
+
   for (const tempTab of temporaryTabs) {
     try {
       await browser.tabs.remove(tempTab.id);
@@ -88,7 +77,6 @@ async function closeTemporaryTabs() {
   }
 }
 
-// Handle tab activation changes
 async function onTabActivated(activeInfo) {
   await closeTemporaryTabs();
 }
