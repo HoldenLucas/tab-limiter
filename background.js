@@ -4,9 +4,7 @@ const TEMPORARY_GROUP_TITLE = "Temp\u200Borary"; // Invisible zero-width space
 
 async function getTabLimit() {
   const result = await browser.storage.sync.get(TAB_LIMIT_KEY);
-  // const defaultTabLimit = Number.POSITIVE_INFINITY;
-  const defaultTabLimit = 8; // FIXME
-  const tabLimit = result.tabLimit ?? defaultTabLimit;
+  const tabLimit = result[TAB_LIMIT_KEY] ?? Number.POSITIVE_INFINITY;
   return tabLimit;
 }
 
