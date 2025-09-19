@@ -1,10 +1,11 @@
-// Save settings
+import { TAB_LIMIT_KEY } from "./constants.js";
+
 function saveOptions() {
   const tabLimit = parseInt(document.getElementById("tabLimit").value);
 
   browser.storage.sync
     .set({
-      tabLimit: tabLimit,
+      TAB_LIMIT_KEY: tabLimit,
     })
     .then(() => {
       // Show status

@@ -8,6 +8,8 @@
 //
 // If there is already a tab in the Temporary group, opening another tab will close the existing temporary tab.
 
+import { TAB_LIMIT_KEY } from "./constants.js";
+
 const TEMPORARY_GROUP_TITLE = "Temporary\u200B"; // Invisible zero-width space at end
 
 async function getTabLimit() {
