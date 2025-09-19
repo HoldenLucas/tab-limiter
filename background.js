@@ -1,10 +1,3 @@
-// # Holden's Tab Limiter
-//
-// This is a Firefox extension that limits the maximum number of open tabs.
-// When the maximum number of tabs is reached, opening another tab will put it in the Temporary tab group.
-// The Temporary tab group should only ever contain one tab.
-// If there is already a tab in the Temporary group, opening another tab will close the existing temporary tab.
-
 import { TAB_LIMIT_KEY } from "./constants.js";
 
 const TEMPORARY_GROUP_TITLE = "Temporary\u200B"; // Invisible zero-width space
