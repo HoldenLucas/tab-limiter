@@ -5,7 +5,7 @@ function saveOptions() {
 
   browser.storage.sync
     .set({
-      TAB_LIMIT_KEY: tabLimit,
+      [[TAB_LIMIT_KEY]]: tabLimit,
     })
     .then(() => {
       const status = document.getElementById("status");
@@ -19,10 +19,10 @@ function saveOptions() {
 function loadOptions() {
   browser.storage.sync
     .get({
-      tabLimit: 8,
+      [[TAB_LIMIT_KEY]]: 8,
     })
     .then((result) => {
-      document.getElementById("tabLimit").value = result.tabLimit;
+      document.getElementById("tabLimit").value = result[TAB_LIMIT_KEY];
     });
 }
 
