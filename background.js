@@ -1,7 +1,8 @@
 const TEMPORARY_GROUP_TITLE = "Temporary\u200B"; // Invisible zero-width space at end
 
 async function getTabLimit() {
-  const result = await browser.storage.sync.get({ tabLimit: Infinity });
+  const result = await browser.storage.sync.get("tabLimit");
+  const tabLimit = result.tabLimit ?? Number.POSITIVE_INFINITY;
   return result.tabLimit;
 }
 
