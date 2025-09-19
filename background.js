@@ -21,7 +21,6 @@ async function findTemporaryGroup() {
     const allGroups = await browser.tabGroups.query({});
     return allGroups.find((group) => group.title === TEMPORARY_GROUP_TITLE);
   } catch (e) {
-    console.log("Could not query tab groups");
     return null;
   }
 }
@@ -59,37 +58,51 @@ async function getOrCreateTemporaryGroup(tabId) {
       color: "red",
     });
 
-    console.log(`Created temporary tab group ${newGroupId}`);
     return newGroupId;
   }
 }
 
-async function onTabCreated(tab) {
+async function onTabCreated(createdTab) {
   const tabs = await browser.tabs.query({});
   const tabLimit = await getTabLimit();
 
   if (tabs.length > tabLimit) {
-    await closeTemporaryTabs();
+    await getOrCreateTemporaryGroup(createdTab.id);
 
-    await getOrCreateTemporaryGroup(tab.id);
+    await replaceTemporaryTab(createdTab.id);
   }
 }
 
-async function closeTemporaryTabs() {
+async function replaceTemporaryTab(preserveTabId) {
+  const temporaryTabs = await getTemporaryTabs();
+
+  const tabsToClose = temporaryTabs.filter((tab) => tab.id !== preserveTabId);
+
+  for (const tab of tabsToClose) {
+    await closeTab(tab);
+  }
+}
+
+async function closeAllTemporaryTabs() {
   const temporaryTabs = await getTemporaryTabs();
 
   for (const tempTab of temporaryTabs) {
-    try {
-      await browser.tabs.remove(tempTab.id);
-      console.log(`Closed temporary tab ${tempTab.id}`);
-    } catch (e) {
-      console.log(`Temporary tab ${tempTab.id} was already closed`);
-    }
+    await closeTab(tempTab);
+  }
+}
+
+async function closeTab(tab) {
+  const tabId = tab.id;
+  try {
+    await browser.tabs.remove(tabId);
+    console.log(`Closed tab ${tabId}`);
+  } catch (e) {
+    console.log(`Tab ${tabId} was already closed`);
   }
 }
 
 async function onTabActivated(activeInfo) {
-  await closeTemporaryTabs();
+  await closeAllTemporaryTabs();
 }
 
 // Listen for events
